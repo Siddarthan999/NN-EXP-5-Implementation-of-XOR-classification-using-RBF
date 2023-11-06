@@ -37,63 +37,78 @@ The RBF of hidden neuron as gaussian function
 ## PROGRAM:
 ```
 import numpy as np
-from sklearn.cluster import KMeans
-from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import StandardScaler
-from sklearn.neural_network import MLPClassifier
-def generate_xor_data(n_samples):
-    np.random.seed(0)
-    X = np.random.rand(n_samples, 2)
-    y = np.logical_xor(X[:, 0] > 0.5, X[:, 1] > 0.5)
-    return X, y
-def train_rbf_classifier(X, y, n_clusters=2):
-    kmeans = KMeans(n_clusters=n_clusters, random_state=0)
-    kmeans.fit(X)
-
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-
-    rbf_features = np.exp(-kmeans.transform(X_scaled) ** 2)
-
-    rbf_classifier = MLPClassifier(hidden_layer_sizes=(n_clusters,), activation='identity', max_iter=10000)
-    rbf_classifier.fit(rbf_features, y)
-
-    return kmeans, scaler, rbf_classifier
-def predict_rbf_classifier(X, kmeans, scaler, rbf_classifier):
-    X_scaled = scaler.transform(X)
-    rbf_features = np.exp(-kmeans.transform(X_scaled) ** 2)
-    return rbf_classifier.predict(rbf_features)
-X_train, y_train = generate_xor_data(200)
-X_test, y_test = generate_xor_data(100)
-
-kmeans, scaler, rbf_classifier = train_rbf_classifier(X_train, y_train)
-y_pred = predict_rbf_classifier(X_test, kmeans, scaler, rbf_classifier)
-
-accuracy = accuracy_score(y_test, y_pred)
-print(f"Accuracy: {accuracy}")
-
-# Plot XOR data
-plt.figure(figsize=(12, 6))
-
-plt.subplot(1, 2, 1)
-plt.scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap=plt.cm.Paired, s=100)
-plt.title("XOR Data (Training Set)")
-
-# Plot RBF activations in hidden space
-X_test_scaled = scaler.transform(X_test)
-rbf_features_test = np.exp(-kmeans.transform(X_test_scaled) ** 2)
-
-plt.subplot(1, 2, 2)
-plt.scatter(rbf_features_test[:, 0], rbf_features_test[:, 1], c=y_pred, cmap=plt.cm.Paired, s=100)
-plt.title("RBF Activations in Hidden Space (Test Set)")
-
-plt.show()
+import matplotlib.pyplot as plt
+def gaussian_rbf(x, landmark, gamma=1):
+    return np.exp(-gamma * np.linalg.norm(x - landmark)**2)
+def end_to_end(X1, X2, ys, mu1, mu2):
+    from_1 = [gaussian_rbf(i, mu1) for i in zip(X1, X2)]
+    from_2 = [gaussian_rbf(i, mu2) for i in zip(X1, X2)]
+    # plot
+    plt.figure(figsize=(13, 5))
+    plt.subplot(1, 2, 1)
+    plt.scatter((x1[0], x1[3]), (x2[0], x2[3]), label="Class_0")
+    plt.scatter((x1[1], x1[2]), (x2[1], x2[2]), label="Class_1")
+    plt.xlabel("$X1$", fontsize=15)
+    plt.ylabel("$X2$", fontsize=15)
+    plt.title("Xor: Linearly Inseparable", fontsize=15)
+    plt.legend()
+    plt.subplot(1, 2, 2)
+    plt.scatter(from_1[0], from_2[0], label="Class_0")
+    plt.scatter(from_1[1], from_2[1], label="Class_1")
+    plt.scatter(from_1[2], from_2[2], label="Class_1")
+    plt.scatter(from_1[3], from_2[3], label="Class_0")
+    plt.plot([0, 0.95], [0.95, 0], "k--")
+    plt.annotate("Seperating hyperplane", xy=(0.4, 0.55), xytext=(0.55, 0.66),
+                arrowprops=dict(facecolor='black', shrink=0.05))
+    plt.xlabel(f"$mu1$: {(mu1)}", fontsize=15)
+    plt.ylabel(f"$mu2$: {(mu2)}", fontsize=15)
+    plt.title("Transformed Inputs: Linearly Seperable", fontsize=15)
+    plt.legend()
+    # solving problem using matrices form
+    # AW = Y
+    A = []
+    for i, j in zip(from_1, from_2):
+        temp = []
+        temp.append(i)
+        temp.append(j)
+        temp.append(1)
+        A.append(temp)
+    A = np.array(A)
+    W = np.linalg.inv(A.T.dot(A)).dot(A.T).dot(ys)
+    print(np.round(A.dot(W)))
+    print(ys)
+    print(f"Weights: {W}")
+    return W
+def predict_matrix(point, weights):
+    gaussian_rbf_0 = gaussian_rbf(np.array(point), mu1)
+    gaussian_rbf_1 = gaussian_rbf(np.array(point), mu2)
+    A = np.array([gaussian_rbf_0, gaussian_rbf_1, 1])
+    return np.round(A.dot(weights))
+# points
+x1 = np.array([0, 0, 1, 1])
+x2 = np.array([0, 1, 0, 1])
+ys = np.array([0, 1, 1, 0])
+# centers
+mu1 = np.array([0, 1])
+mu2 = np.array([1, 0])
+w = end_to_end(x1, x2, ys, mu1, mu2)
+# testing
+print(f"Input:{np.array([0, 0])}, Predicted: {predict_matrix(np.array([0, 0]), w)}")
+print(f"Input:{np.array([0, 1])}, Predicted: {predict_matrix(np.array([0, 1]), w)}")
+print(f"Input:{np.array([1, 0])}, Predicted: {predict_matrix(np.array([1, 0]), w)}")
+print(f"Input:{np.array([1, 1])}, Predicted: {predict_matrix(np.array([1, 1]), w)}")
 ```
 ## OUTPUT :
 ```
-Accuracy: 0.54
+[0. 1. 1. 0.]
+[0 1 1 0]
+Weights: [ 2.5026503   2.5026503  -1.84134719]
+Input:[0 0], Predicted: 0.0
+Input:[0 1], Predicted: 1.0
+Input:[1 0], Predicted: 1.0
+Input:[1 1], Predicted: 0.0
 ```
-![image](https://github.com/Siddarthan999/NN-EXP-5-Implementation-of-XOR-classification-using-RBF/assets/91734840/8b7c9555-7d67-457a-bb47-4774f8fedcd8)
+![image](https://github.com/Siddarthan999/NN-EXP-5-Implementation-of-XOR-classification-using-RBF/assets/91734840/df85b3e9-2cf4-4c6f-b1b9-d3a0cc666719)
 
 ## RESULT:
 Thus, classifying the Binary input patterns of XOR data by implementing Radial Basis Function Neural Networks has been implemented and executed successfully.
